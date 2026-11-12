@@ -56,7 +56,7 @@ function formatTime(seconds) {
 const AssistantPage = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
-  const [selectedLanguage, setSelectedLanguage] = useState('kn-IN');
+  const [selectedLanguage, setSelectedLanguage] = useState('en-IN');
   const [textInput, setTextInput] = useState('');
   const [statusInfo, setStatusInfo] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -395,9 +395,8 @@ const AssistantPage = () => {
         <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-6 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-4">
             <div
-              className={`w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 ${
-                playbackState === 'playing' ? 'ring-2 ring-emerald-300 animate-pulse' : ''
-              }`}
+              className={`w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 ${playbackState === 'playing' ? 'ring-2 ring-emerald-300 animate-pulse' : ''
+                }`}
             >
               <Bot className="w-7 h-7 text-emerald-300" />
             </div>
@@ -462,19 +461,17 @@ const AssistantPage = () => {
                 className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl p-4 shadow-xs transition-all duration-300 ${
-                    m.role === 'user'
+                  className={`max-w-[85%] rounded-2xl p-4 shadow-xs transition-all duration-300 ${m.role === 'user'
                       ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-br-xs'
                       : isThisPlaying
-                      ? 'bg-white text-slate-800 border-2 border-emerald-400 shadow-md ring-4 ring-emerald-50 rounded-bl-xs'
-                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
-                  }`}
+                        ? 'bg-white text-slate-800 border-2 border-emerald-400 shadow-md ring-4 ring-emerald-50 rounded-bl-xs'
+                        : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
+                    }`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5 text-xs">
                     <span
-                      className={`font-semibold flex items-center gap-1.5 ${
-                        m.role === 'user' ? 'text-emerald-100' : 'text-emerald-700'
-                      }`}
+                      className={`font-semibold flex items-center gap-1.5 ${m.role === 'user' ? 'text-emerald-100' : 'text-emerald-700'
+                        }`}
                     >
                       {m.role === 'user' ? (
                         <>
@@ -552,11 +549,10 @@ const AssistantPage = () => {
                               onClick={() => playAudioForMessage(m)}
                               disabled={isThisLoading}
                               title={isThisPaused ? 'Resume' : 'Play Voice'}
-                              className={`px-3 py-1 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all ${
-                                isThisPaused
+                              className={`px-3 py-1 rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all ${isThisPaused
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                   : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-                              }`}
+                                }`}
                             >
                               {isThisLoading ? (
                                 <>

@@ -25,8 +25,8 @@ async function run10QuestionSuite() {
   console.log('===============================================================\n');
 
   const server = http.createServer(app);
-  await new Promise((resolve) => server.listen(8098, resolve));
-  const baseUrl = 'http://localhost:8098/api/ai';
+  await new Promise((resolve) => server.listen(8098, '127.0.0.1', resolve));
+  const baseUrl = 'http://127.0.0.1:8098/api/ai';
 
   const results = [];
 

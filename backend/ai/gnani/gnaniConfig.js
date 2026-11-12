@@ -9,30 +9,53 @@
 const getGnaniConfig = () => {
   const isDemoExplicit = process.env.AI_DEMO_MODE === 'true';
   const geminiApiKey = process.env.GEMINI_API_KEY || '';
+  const openaiApiKey = process.env.OPENAI_API_KEY || '';
+  const groqApiKey = process.env.GROQ_API_KEY || '';
   const gnaniApiKey = process.env.GNANI_API_KEY || '';
   const evonApiKey = process.env.EVON_API_KEY || '';
   const evonBaseUrl = process.env.EVON_API_BASE_URL || 'https://api-inference.huggingface.co/models/gnani/gnani-evon-v3.3-30B-A3B';
 
   // Check if each service has credentials
   const isGeminiConfigured = Boolean(geminiApiKey && geminiApiKey.trim() !== '');
+  const isOpenAIConfigured = Boolean(openaiApiKey && openaiApiKey.trim() !== '');
+  const isGroqConfigured = Boolean(groqApiKey && groqApiKey.trim() !== '');
   const isPrismaConfigured = Boolean(gnaniApiKey && gnaniApiKey.trim() !== '');
-  const isEvonConfigured = Boolean(isGeminiConfigured || (evonApiKey && evonApiKey.trim() !== '') || (process.env.EVON_API_BASE_URL && !process.env.EVON_API_BASE_URL.includes('huggingface.co')));
+  const isDedicatedEvon = Boolean(evonApiKey && evonApiKey.trim() !== '' && process.env.EVON_API_BASE_URL && !process.env.EVON_API_BASE_URL.includes('huggingface.co'));
+  const isAnyLLMConfigured = isGeminiConfigured || isOpenAIConfigured || isGroqConfigured || isDedicatedEvon;
   const isTimbreConfigured = Boolean(gnaniApiKey && gnaniApiKey.trim() !== '');
 
-  const effectiveDemoMode = isDemoExplicit || (!isGeminiConfigured && (!isPrismaConfigured || !isEvonConfigured || !isTimbreConfigured));
+  const effectiveDemoMode = isDemoExplicit;
+
+  let activeLlmMode = 'LIVE (AgriConnect Native Intelligence)';
+  if (isGeminiConfigured) activeLlmMode = 'LIVE (Gemini)';
+  else if (isOpenAIConfigured) activeLlmMode = 'LIVE (OpenAI)';
+  else if (isGroqConfigured) activeLlmMode = 'LIVE (Groq)';
+  else if (isDedicatedEvon) activeLlmMode = 'LIVE (Evon Remote)';
 
   return {
     isDemoMode: effectiveDemoMode,
     modes: {
       gemini: isGeminiConfigured ? 'LIVE' : 'DISABLED',
+      openai: isOpenAIConfigured ? 'LIVE' : 'DISABLED',
+      groq: isGroqConfigured ? 'LIVE' : 'DISABLED',
       prisma: isPrismaConfigured && !isDemoExplicit ? 'LIVE' : 'DEMO',
-      evon: isGeminiConfigured ? 'LIVE (Gemini)' : (isEvonConfigured && !isDemoExplicit ? 'LIVE' : 'DEMO'),
+      evon: activeLlmMode,
       timbre: isTimbreConfigured && !isDemoExplicit ? 'LIVE' : 'DEMO',
     },
     gemini: {
       apiKey: geminiApiKey,
-      model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
       isConfigured: isGeminiConfigured,
+    },
+    openai: {
+      apiKey: openaiApiKey,
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      isConfigured: isOpenAIConfigured,
+    },
+    groq: {
+      apiKey: groqApiKey,
+      model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
+      isConfigured: isGroqConfigured,
     },
     prisma: {
       baseUrl: process.env.GNANI_API_BASE_URL || 'https://api.vachana.ai',

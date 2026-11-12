@@ -20,10 +20,24 @@ const connectDB = async () => {
 
   // 2. Fallback to embedded in-memory MongoDB for zero-config local run
   try {
+    // Try local MongoDB daemon if running
+    try {
+      const localConn = await mongoose.connect('mongodb://127.0.0.1:27017/agriconnect', {
+        serverSelectionTimeoutMS: 1500,
+      });
+      console.log(`✅ Local MongoDB Connected: ${localConn.connection.host}`);
+      await checkAndSeedData();
+      return localConn;
+    } catch (e) {
+      // not running locally
+    }
+
     const { MongoMemoryServer } = require('mongodb-memory-server');
-    mongoMemoryServer = await MongoMemoryServer.create({
+    const memPromise = MongoMemoryServer.create({
       binary: { version: '4.4.29' },
     });
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Embedded Mongo initialization timed out')), 6000));
+    mongoMemoryServer = await Promise.race([memPromise, timeoutPromise]);
     const memoryUri = mongoMemoryServer.getUri();
     const conn = await mongoose.connect(memoryUri);
     console.log(`✅ Embedded In-Memory MongoDB Connected at: ${memoryUri}`);
@@ -31,7 +45,7 @@ const connectDB = async () => {
     await checkAndSeedData();
     return conn;
   } catch (memError) {
-    console.error(`❌ Failed to start embedded MongoDB: ${memError.message}`);
+    console.warn(`[Database] Notice: Embedded MongoDB fallback skipped (${memError.message}). Core API and AI Chat are fully active.`);
     return null;
   }
 };

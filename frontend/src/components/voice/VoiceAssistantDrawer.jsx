@@ -88,7 +88,7 @@ const VoiceAssistantDrawer = ({ isOpen, onClose }) => {
 
   // Assistant states
   const [messages, setMessages] = useState([]);
-  const [selectedLanguage, setSelectedLanguage] = useState('kn-IN');
+  const [selectedLanguage, setSelectedLanguage] = useState('en-IN');
   const [textInput, setTextInput] = useState('');
   const [statusInfo, setStatusInfo] = useState(null);
   const [loading, setLoading] = useState(false);

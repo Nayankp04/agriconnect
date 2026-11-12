@@ -17,8 +17,11 @@ class ConversationService {
   }
 
   getSessionKey(sessionId, userId) {
+    if (sessionId) {
+      return userId ? `user_${userId}_sess_${sessionId}` : `session_${sessionId}`;
+    }
     if (userId) return `user_${userId}`;
-    return `session_${sessionId || 'anonymous'}`;
+    return `session_anonymous`;
   }
 
   getHistory(sessionId, userId) {
@@ -48,9 +51,9 @@ class ConversationService {
       ...message,
     });
 
-    // Keep last 15 messages for token efficiency
-    if (session.messages.length > 15) {
-      session.messages = session.messages.slice(-15);
+    // Keep last 12 messages (6 complete user-assistant turns) for optimal token and memory efficiency
+    if (session.messages.length > 12) {
+      session.messages = session.messages.slice(-12);
     }
 
     return session.messages;

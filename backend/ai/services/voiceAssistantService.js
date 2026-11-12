@@ -5,7 +5,7 @@
  */
 
 const { transcribeAudio } = require('../gnani/prisma');
-const { reasonWithEvon } = require('../gnani/evon');
+const { reasonWithEvon, cleanResponseText } = require('../gnani/evon');
 const { synthesizeSpeech } = require('../gnani/timbre');
 const { executeAuthorizedAction } = require('./intentService');
 const conversationService = require('./conversationService');
@@ -201,7 +201,12 @@ const processTextConversation = async ({
     role: userRole,
     user,
     language,
+    sessionId,
   });
+
+  if (typeof cleanResponseText === 'function') {
+    evonResult.response = cleanResponseText(evonResult.response);
+  }
 
   // 2. Securely execute authorized backend action (MongoDB produce search, order lookup, etc.)
   let actionResult = null;
@@ -260,6 +265,8 @@ const processTextConversation = async ({
       thoughtProcess: evonResult.thought_process,
       intent: evonResult.intent,
       entities: evonResult.entities,
+      provider: evonResult.provider,
+      model: evonResult.model,
       requiresAction: evonResult.requires_action,
       requiresConfirmation: evonResult.requires_confirmation,
       confirmationDetails: evonResult.confirmation_details,
@@ -271,7 +278,7 @@ const processTextConversation = async ({
       overallMode: isAllLive ? 'LIVE' : 'LIVE',
       models: {
         stt: { name: 'Gnani Prisma v2.5', mode: config.modes.prisma },
-        llm: { name: 'Gnani Evon v3.3 (30B)', mode: 'LIVE', provider: evonResult.provider },
+        llm: { name: evonResult.provider || 'AgriConnect AI Engine', mode: 'LIVE', provider: evonResult.provider, model: evonResult.model },
         tts: { name: 'Gnani Timbre v2.5', mode: config.modes.timbre },
       },
       timingMs: processingTimeMs,
