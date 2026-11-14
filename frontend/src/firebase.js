@@ -1,21 +1,32 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// AgriConnect Firebase Web App Configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyCVN0ipGvD_Fn5DaIloycv6nVF18yxQo0k",
-    authDomain: "agriconnect-f12ab.firebaseapp.com",
-    projectId: "agriconnect-f12ab",
-    storageBucket: "agriconnect-f12ab.firebasestorage.app",
-    messagingSenderId: "372286455512",
-    appId: "1:372286455512:web:192b7e26e7effac10fa1ad",
-    measurementId: "G-H238Q8QL6D"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCVN0ipGvD_Fn5DaIloycv6nVF18yxQo0k',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'agriconnect-f12ab.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'agriconnect-f12ab',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'agriconnect-f12ab.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '372286455512',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:372286455512:web:192b7e26e7effac10fa1ad',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-H238Q8QL6D',
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Initialize Firebase App
+export const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase Authentication
+export const auth = getAuth(app);
+
+// Initialize Firebase Analytics safely (browser only)
+export let analytics = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch(() => {});
+}
+
+export default app;

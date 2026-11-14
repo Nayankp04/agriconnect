@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { Sprout, UserCheck, AlertCircle, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { auth } from '../../firebase';
+import { checkEmailAvailability, createRegisterIntent, resendVerificationIntent } from '../../services/authService';
+import { Sprout, UserCheck, AlertCircle, Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 
 const Register = () => {
-  const { register, sendOtp } = useAuth();
-  const navigate = useNavigate();
-
   const [role, setRole] = useState('FARMER');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,64 +13,159 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [city, setCity] = useState('Mysuru');
+
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpMessage, setOtpMessage] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  const handleSendOtp = async (e) => {
-    if (e) e.preventDefault();
-    if (!email) {
-      setError('Please enter your email first.');
+  const startCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    setResendMessage('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+
+    if (!cleanEmail || !password || !cleanName || !cleanPhone) {
+      setError('Please fill in all required fields.');
       return;
     }
-    setError('');
-    setOtpMessage('');
-    setOtpLoading(true);
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      const res = await sendOtp(email.trim());
-      setOtpSent(true);
-      if (res?.devOtp) {
-        setOtp(res.devOtp);
+      // 1. Pre-flight check: Verify email is not already taken in MongoDB User collection
+      const checkRes = await checkEmailAvailability(cleanEmail);
+      if (!checkRes.available) {
+        setError('An account with this email address is already registered. Please log in.');
+        setSubmitting(false);
+        return;
       }
-      setOtpMessage(res?.message || 'Verification OTP sent to your email. Please check your inbox or spam folder.');
+
+      // 2. Create or resume existing unverified Firebase user account (Correction 4)
+      let fbUser = null;
+      try {
+        const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        fbUser = userCred.user;
+      } catch (fbErr) {
+        if (fbErr.code === 'auth/email-already-in-use') {
+          // Account already exists in Firebase. Check if it is unverified
+          try {
+            const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+            fbUser = signInCred.user;
+            if (fbUser.emailVerified) {
+              setError('This email is already verified. Please sign in directly from the login page.');
+              setSubmitting(false);
+              return;
+            }
+          } catch (signInErr) {
+            setError('An account with this email exists in Firebase. Please sign in with your original password or reset it.');
+            setSubmitting(false);
+            return;
+          }
+        } else {
+          throw fbErr;
+        }
+      }
+
+      if (!fbUser) {
+        throw new Error('Could not establish Firebase identity.');
+      }
+
+      // 3. Record pending registration intent with backend (generates cryptographic registrationToken)
+      const intentRes = await createRegisterIntent({
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        password, // Backend encrypts with bcrypt (salt rounds = 10) immediately
+        role,
+        organizationName: organizationName.trim(),
+        businessType: 'Supermarket',
+        location: { city, district: city, state: 'Karnataka' },
+        firebaseUid: fbUser.uid,
+      });
+
+      const regToken = intentRes.registrationToken;
+      sessionStorage.setItem('agriconnect_reg_token', regToken);
+
+      // 4. Send Firebase Email Verification Link with actionCodeSettings
+      const returnUrl = `${window.location.origin}/verify-email?regToken=${regToken}`;
+      await sendEmailVerification(fbUser, {
+        url: returnUrl,
+        handleCodeInApp: true,
+      });
+
+      setVerificationSent(true);
+      startCooldown();
     } catch (err) {
-      setOtpSent(false);
-      setError(err.response?.data?.message || err.message || 'Failed to send OTP.');
+      console.error('[Register] Registration error:', err);
+      let clientMsg = err.response?.data?.message || err.message || 'Registration failed. Please try again.';
+      if (err.code === 'auth/invalid-email') {
+        clientMsg = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/weak-password') {
+        clientMsg = 'Password is too weak. Please choose a stronger password.';
+      }
+      setError(clientMsg);
     } finally {
-      setOtpLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!otpSent) {
-      return handleSendOtp(e);
-    }
-    if (!otp) {
-      setError('Please enter the OTP.');
-      return;
-    }
+  const handleResendLink = async () => {
+    if (resendCooldown > 0) return;
+    setResending(true);
+    setResendMessage('');
     setError('');
-    setSubmitting(true);
+
     try {
-      await register({
-        name: name.trim() || 'New Agri Partner',
-        email: email.trim(),
-        phone,
-        password,
-        role,
-        organizationName,
-        location: { city, district: city, state: 'Karnataka' },
-        otp: otp.trim(),
+      const cleanEmail = email.trim().toLowerCase();
+      let fbUser = auth.currentUser;
+
+      if (!fbUser || fbUser.email.toLowerCase() !== cleanEmail) {
+        const signInCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        fbUser = signInCred.user;
+      }
+
+      // Refresh registrationToken on backend
+      const intentRes = await resendVerificationIntent(cleanEmail);
+      const freshToken = intentRes.registrationToken;
+      sessionStorage.setItem('agriconnect_reg_token', freshToken);
+
+      const returnUrl = `${window.location.origin}/verify-email?regToken=${freshToken}`;
+      await sendEmailVerification(fbUser, {
+        url: returnUrl,
+        handleCodeInApp: true,
       });
-      navigate('/dashboard');
+
+      setResendMessage('A fresh verification link has been sent to your email.');
+      startCooldown();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Registration failed. Please check details or try another email.');
+      console.error('[Register] Resend error:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to resend verification link.');
     } finally {
-      setSubmitting(false);
+      setResending(false);
     }
   };
 
@@ -111,166 +205,209 @@ const Register = () => {
           </div>
         </div>
 
-        {/* Right Side: Form */}
+        {/* Right Side: Form or Verification Pending Screen */}
         <div className="p-8 space-y-6">
-          <div className="text-center space-y-1">
-            <h2 className="text-2xl font-black text-slate-900">Create Account</h2>
-            <p className="text-xs text-slate-500">Register as Farmer, FPO, Buyer or Logistics Partner</p>
-          </div>
-
-          {/* Role Selector Tabs */}
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-2xl text-xs font-bold">
-            {['FARMER', 'FPO', 'BUYER', 'LOGISTICS'].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`py-2 rounded-xl transition-all ${
-                  role === r ? 'bg-agri-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
-          {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {otpMessage && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-semibold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>{otpMessage}</span>
-            </div>
-          )}
-
-          <form className="space-y-3" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Basavaraj Gowda"
-                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-              />
-            </div>
-
-            {(role === 'FPO' || role === 'BUYER' || role === 'LOGISTICS') && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Organization / Company Name</label>
-                <input
-                  type="text"
-                  required
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                  placeholder={role === 'FPO' ? 'e.g. Mysuru Farmers Producer Co.' : 'e.g. FreshToHome Foods'}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-                />
+          {!verificationSent ? (
+            <>
+              <div className="text-center space-y-1">
+                <h2 className="text-2xl font-black text-slate-900">Create Account</h2>
+                <p className="text-xs text-slate-500">Register as Farmer, FPO, Buyer or Logistics Partner</p>
               </div>
-            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@domain.com"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-                />
+              {/* Role Selector Tabs */}
+              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-2xl text-xs font-bold">
+                {['FARMER', 'FPO', 'BUYER', 'LOGISTICS'].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRole(r)}
+                    className={`py-2 rounded-xl transition-all ${
+                      role === r ? 'bg-agri-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter phone number (e.g. 9845012345)"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create password (min 6 chars)"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">City / Region</label>
-                <select
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+              {error && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form className="space-y-3" onSubmit={handleRegister}>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Basavaraj Gowda"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                  />
+                </div>
+
+                {(role === 'FPO' || role === 'BUYER' || role === 'LOGISTICS') && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Organization / Company Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      placeholder={role === 'FPO' ? 'e.g. Mysuru Farmers Producer Co.' : 'e.g. FreshToHome Foods'}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@domain.com"
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. 9845012345"
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Create password (min 6 chars)"
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">City / Region</label>
+                    <select
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
+                    >
+                      <option value="Mysuru">Mysuru</option>
+                      <option value="Mandya">Mandya</option>
+                      <option value="Hassan">Hassan</option>
+                      <option value="Kodagu">Kodagu</option>
+                      <option value="Bengaluru">Bengaluru</option>
+                      <option value="Chamarajanagar">Chamarajanagar</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 bg-gradient-to-r from-agri-700 to-emerald-700 hover:from-agri-800 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
                 >
-                  <option value="Mysuru">Mysuru</option>
-                  <option value="Mandya">Mandya</option>
-                  <option value="Hassan">Hassan</option>
-                  <option value="Kodagu">Kodagu</option>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Chamarajanagar">Chamarajanagar</option>
-                </select>
-              </div>
-            </div>
+                  <UserCheck className="w-4 h-4" />
+                  {submitting ? 'Creating Account & Sending Link...' : `Register as ${role}`}
+                </button>
+              </form>
 
-            {otpSent && (
+              <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
+                Already registered?{' '}
+                <Link to="/login" className="font-bold text-agri-700 hover:underline">
+                  Log in here
+                </Link>
+              </div>
+            </>
+          ) : (
+            /* Verification Link Sent State */
+            <div className="space-y-5 text-center py-2">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                <Mail className="w-7 h-7" />
+              </div>
+
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">Enter Verification OTP</label>
+                <h2 className="text-2xl font-black text-slate-900">Check Your Email</h2>
+                <p className="text-xs text-slate-600">
+                  We've sent a verification link to:
+                </p>
+                <p className="text-sm font-extrabold text-agri-800 bg-agri-50 py-1.5 px-3 rounded-lg inline-block border border-agri-200">
+                  {email}
+                </p>
+              </div>
+
+              <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-left space-y-2 text-xs text-emerald-950">
+                <div className="flex items-center gap-2 font-bold text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>Next Steps for Instant Activation:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-700 pl-1 leading-relaxed">
+                  <li>Open your email inbox (or check spam/promotions folder).</li>
+                  <li>Click on the <strong>verification link</strong> sent by Firebase Auth.</li>
+                  <li>You will be redirected back to AgriConnect and your <strong>{role}</strong> dashboard will be activated.</li>
+                </ol>
+              </div>
+
+              {resendMessage && (
+                <div className="p-3 bg-emerald-100/60 border border-emerald-300 rounded-xl text-xs text-emerald-800 font-bold">
+                  {resendMessage}
+                </div>
+              )}
+
+              {error && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2 text-left">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="pt-2 space-y-3">
+                <button
+                  type="button"
+                  disabled={resending || resendCooldown > 0}
+                  onClick={handleResendLink}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
+                  {resending
+                    ? 'Resending Link...'
+                    : resendCooldown > 0
+                    ? `Resend available in ${resendCooldown}s`
+                    : 'Resend Verification Link'}
+                </button>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
                   <button
                     type="button"
-                    disabled={otpLoading}
-                    onClick={handleSendOtp}
-                    className="text-[11px] font-bold text-agri-700 hover:text-agri-800 hover:underline disabled:opacity-50"
+                    onClick={() => setVerificationSent(false)}
+                    className="text-slate-500 hover:text-slate-800 font-medium"
                   >
-                    {otpLoading ? 'Resending...' : 'Resend Code'}
+                    ← Edit Registration Info
                   </button>
+                  <Link to="/login" className="font-bold text-agri-700 hover:underline">
+                    Proceed to Login →
+                  </Link>
                 </div>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="Enter 6-digit code from email"
-                  className="w-full px-3.5 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-center text-sm font-bold tracking-widest text-emerald-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-agri-600"
-                />
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={submitting || otpLoading}
-              className="w-full py-3 bg-gradient-to-r from-agri-700 to-emerald-700 hover:from-agri-800 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
-            >
-              <UserCheck className="w-4 h-4" />
-              {otpLoading ? 'Sending OTP...' : submitting ? 'Creating Account...' : otpSent ? `Register & Login as ${role}` : 'Send OTP'}
-            </button>
-          </form>
-
-          <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
-            Already registered?{' '}
-            <Link to="/login" className="font-bold text-agri-700 hover:underline">
-              Log in here
-            </Link>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

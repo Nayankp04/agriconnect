@@ -10,6 +10,7 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import VerifyEmail from './pages/auth/VerifyEmail';
 import Marketplace from './pages/marketplace/Marketplace';
 import ProduceDetails from './pages/marketplace/ProduceDetails';
 import ProcurementDetails from './pages/marketplace/ProcurementDetails';
@@ -70,6 +71,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/assistant" element={<AssistantPage />} />
               <Route path="/produce/:id" element={<ProduceDetails />} />

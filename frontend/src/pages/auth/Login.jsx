@@ -11,15 +11,20 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isPendingVerification, setIsPendingVerification] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsPendingVerification(false);
     setSubmitting(true);
     try {
       await login({ email: email.trim(), password });
       navigate('/dashboard');
     } catch (err) {
+      if (err.response?.data?.code === 'EMAIL_VERIFICATION_PENDING') {
+        setIsPendingVerification(true);
+      }
       setError(err.response?.data?.message || err.message || 'Invalid email or password');
     } finally {
       setSubmitting(false);
@@ -59,9 +64,21 @@ const Login = () => {
         </div>
 
         {error && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold space-y-1.5">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            {isPendingVerification && (
+              <div className="pt-1 border-t border-rose-200">
+                <Link
+                  to="/verify-email"
+                  className="inline-block text-[11px] font-bold text-agri-700 hover:text-agri-800 underline"
+                >
+                  Need a new verification link? Click here to resend →
+                </Link>
+              </div>
+            )}
           </div>
         )}
 

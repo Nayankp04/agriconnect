@@ -1,5 +1,11 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { loginUser, registerUser, getCurrentUser, sendOtp as sendOtpService } from '../services/authService';
+import {
+  loginUser,
+  registerUser,
+  getCurrentUser,
+  sendOtp as sendOtpService,
+  verifyFirebaseRegistration,
+} from '../services/authService';
 
 export const AuthContext = createContext();
 
@@ -48,6 +54,16 @@ export const AuthProvider = ({ children }) => {
     throw new Error(res.message || 'Registration failed');
   };
 
+  const finalizeRegistrationWithToken = async ({ idToken, registrationToken }) => {
+    const res = await verifyFirebaseRegistration({ idToken, registrationToken });
+    if (res.success) {
+      localStorage.setItem('agriconnect_token', res.data.token);
+      setUser(res.data);
+      return res.data;
+    }
+    throw new Error(res.message || 'Registration finalization failed');
+  };
+
   const sendOtp = async (email) => {
     const res = await sendOtpService(email);
     if (res.success) {
@@ -73,6 +89,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         register,
+        finalizeRegistrationWithToken,
         sendOtp,
         logout,
         switchDemoRole,
