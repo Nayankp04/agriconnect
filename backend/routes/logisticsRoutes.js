@@ -5,6 +5,8 @@ const {
   updateLogisticsProfile,
   getVehicles,
   addVehicle,
+  updateVehicle,
+  deleteVehicle,
   getLogisticsDashboard,
 } = require('../controllers/logisticsController');
 const { protect } = require('../middleware/authMiddleware');
@@ -20,6 +22,10 @@ router.route('/profile')
 router.route('/vehicles')
   .get(getVehicles)
   .post(authorize('LOGISTICS', 'ADMIN'), addVehicle);
+
+router.route('/vehicles/:id')
+  .put(authorize('LOGISTICS', 'ADMIN'), updateVehicle)
+  .delete(authorize('LOGISTICS', 'ADMIN'), deleteVehicle);
 
 router.get('/dashboard', getLogisticsDashboard);
 

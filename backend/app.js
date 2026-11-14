@@ -24,8 +24,13 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'AgriConnect API is running', timestamp: new Date() });
 });
 
+// Serve static uploads
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+app.use('/uploads', express.static(uploadsDir));
+
 // Register API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/upload', require('./routes/uploadRoutes'));
 app.use('/api/farmers', require('./routes/farmerRoutes'));
 app.use('/api/fpo', require('./routes/fpoRoutes'));
 app.use('/api/buyers', require('./routes/buyerRoutes'));

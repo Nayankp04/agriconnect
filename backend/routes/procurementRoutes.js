@@ -4,6 +4,8 @@ const {
   createProcurement,
   getProcurements,
   getProcurementById,
+  updateProcurement,
+  deleteProcurement,
   respondToProcurement,
   handleResponseStatus,
 } = require('../controllers/procurementController');
@@ -15,7 +17,9 @@ router.route('/')
   .post(protect, authorize('FPO', 'BUYER', 'ADMIN'), createProcurement);
 
 router.route('/:id')
-  .get(getProcurementById);
+  .get(getProcurementById)
+  .put(protect, authorize('FPO', 'BUYER', 'ADMIN'), updateProcurement)
+  .delete(protect, authorize('FPO', 'BUYER', 'ADMIN'), deleteProcurement);
 
 router.post('/:id/respond', protect, respondToProcurement);
 router.put('/:id/accept-response', protect, authorize('FPO', 'BUYER', 'ADMIN'), handleResponseStatus);

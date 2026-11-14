@@ -16,6 +16,11 @@ const produceSchema = new mongoose.Schema(
       type: String,
       default: 'Standard Native',
     },
+    category: {
+      type: String,
+      enum: ['Vegetables', 'Fruits', 'Grains', 'Pulses', 'Spices', 'Oilseeds', 'Dairy', 'Other'],
+      default: 'Vegetables',
+    },
     quantity: {
       type: Number,
       required: [true, 'Total quantity is required'],
@@ -24,23 +29,29 @@ const produceSchema = new mongoose.Schema(
     availableQuantity: {
       type: Number,
       required: true,
+      min: [0, 'Available quantity cannot be negative'],
     },
     unit: {
       type: String,
-      enum: ['kg', 'ton', 'quintal'],
+      enum: ['kg', 'quintal', 'ton', 'litre', 'bag', 'piece'],
       default: 'kg',
     },
     expectedPrice: {
       type: Number,
       required: [true, 'Expected price is required'],
+      min: [0, 'Price must be positive'],
     },
     minOrderQuantity: {
       type: Number,
-      default: 100,
+      default: 10,
     },
     harvestDate: {
       type: Date,
-      required: true,
+      default: Date.now,
+    },
+    availableFrom: {
+      type: Date,
+      default: Date.now,
     },
     qualityGrade: {
       type: String,
@@ -51,6 +62,8 @@ const produceSchema = new mongoose.Schema(
       city: { type: String, default: 'Mysuru' },
       district: { type: String, default: 'Mysuru' },
       state: { type: String, default: 'Karnataka' },
+      address: { type: String, default: '' },
+      pincode: { type: String, default: '' },
     },
     images: [
       {
@@ -63,7 +76,7 @@ const produceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['AVAILABLE', 'PARTIALLY_SOLD', 'SOLD_OUT'],
+      enum: ['AVAILABLE', 'PARTIALLY_SOLD', 'SOLD_OUT', 'UNAVAILABLE'],
       default: 'AVAILABLE',
     },
   },

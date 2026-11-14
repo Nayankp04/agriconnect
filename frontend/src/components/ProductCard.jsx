@@ -11,8 +11,12 @@ const ProductCard = ({ produce, onAction, actionLabel = 'Send Request' }) => {
       <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
         <img
           src={produce.images && produce.images[0] ? produce.images[0] : defaultImg}
-          alt={produce.cropName}
+          alt={produce.name || produce.cropName}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = defaultImg;
+          }}
         />
         <div className="absolute top-3 left-3 flex gap-2">
           <span className="px-2.5 py-1 bg-white/95 backdrop-blur-md rounded-full text-xs font-bold text-slate-800 shadow-sm border border-white">
@@ -20,8 +24,8 @@ const ProductCard = ({ produce, onAction, actionLabel = 'Send Request' }) => {
           </span>
           <StatusBadge status={produce.status} />
         </div>
-        <div className="absolute bottom-3 right-3 px-3 py-1 bg-agri-900/85 backdrop-blur-md rounded-lg text-white font-extrabold text-sm shadow">
-          ₹{produce.expectedPrice} / {produce.unit || 'kg'}
+        <div className="absolute bottom-3 right-3 px-3 py-1 bg-slate-900/85 backdrop-blur-md rounded-lg text-white font-extrabold text-sm shadow">
+          ₹{produce.pricePerUnit || produce.expectedPrice} / {produce.unit || 'kg'}
         </div>
       </div>
 
@@ -29,8 +33,8 @@ const ProductCard = ({ produce, onAction, actionLabel = 'Send Request' }) => {
       <div className="p-5 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-lg font-bold text-slate-900 group-hover:text-agri-700 transition-colors">
-              {produce.cropName}
+            <h3 className="text-lg font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+              {produce.name || produce.cropName}
             </h3>
             <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
               {produce.variety || 'Native'}

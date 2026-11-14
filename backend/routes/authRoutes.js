@@ -4,6 +4,7 @@ const {
   registerUser,
   loginUser,
   getMe,
+  updateMe,
   getUsers,
   sendOtp,
   checkSmtpStatus,
@@ -27,7 +28,9 @@ router.post('/login', loginUser);
 router.post('/send-otp', sendOtp);
 router.get('/email-status', checkSmtpStatus);
 router.get('/smtp-status', checkSmtpStatus);
-router.get('/me', protect, getMe);
+router.route('/me')
+  .get(protect, getMe)
+  .put(protect, updateMe);
 router.get('/users', protect, authorize('ADMIN'), getUsers);
 
 module.exports = router;

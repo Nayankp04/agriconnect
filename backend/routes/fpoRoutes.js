@@ -5,6 +5,8 @@ const {
   updateFPOProfile,
   getFPOInventory,
   addFPOInventory,
+  updateFPOInventory,
+  deleteFPOInventory,
   getFPODashboard,
 } = require('../controllers/fpoController');
 const { protect } = require('../middleware/authMiddleware');
@@ -20,6 +22,10 @@ router.route('/profile')
 router.route('/inventory')
   .get(getFPOInventory)
   .post(authorize('FPO', 'ADMIN'), addFPOInventory);
+
+router.route('/inventory/:id')
+  .put(authorize('FPO', 'ADMIN'), updateFPOInventory)
+  .delete(authorize('FPO', 'ADMIN'), deleteFPOInventory);
 
 router.get('/dashboard', getFPODashboard);
 

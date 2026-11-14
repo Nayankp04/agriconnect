@@ -21,6 +21,11 @@ export const updateProduce = async (id, data) => {
   return res.data;
 };
 
+export const updateProduceStock = async (id, stockData) => {
+  const res = await API.patch(`/produce/${id}/stock`, stockData);
+  return res.data;
+};
+
 export const deleteProduce = async (id) => {
   const res = await API.delete(`/produce/${id}`);
   return res.data;

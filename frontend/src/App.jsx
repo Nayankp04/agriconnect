@@ -6,14 +6,31 @@ import { AuthProvider, AuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 
-// Pages
+// Core Public Pages
 import Home from './pages/Home';
+import About from './pages/About';
+import Contact from './pages/Contact';
+import HelpSupport from './pages/HelpSupport';
+import FAQ from './pages/FAQ';
+
+// Auth & Profile
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import VerifyEmail from './pages/auth/VerifyEmail';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
+import Profile from './pages/Profile';
+import EditProfile from './pages/EditProfile';
+
+// Marketplace & Commerce
 import Marketplace from './pages/marketplace/Marketplace';
 import ProduceDetails from './pages/marketplace/ProduceDetails';
 import ProcurementDetails from './pages/marketplace/ProcurementDetails';
+import SearchResults from './pages/SearchResults';
+import Cart from './pages/Cart';
+import OrderDetails from './pages/OrderDetails';
+import OrderHistory from './pages/OrderHistory';
+import NotificationsPage from './pages/NotificationsPage';
 
 // Role Dashboards & Workflows
 import FarmerDashboard from './pages/farmer/FarmerDashboard';
@@ -37,6 +54,18 @@ import Shipments from './pages/logistics/Shipments';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import Messages from './pages/Messages';
 import AssistantPage from './pages/assistant/AssistantPage';
+
+// Legal Pages
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import TermsConditions from './pages/legal/TermsConditions';
+import CookiePolicy from './pages/legal/CookiePolicy';
+
+// Error Pages
+import NotFound from './pages/errors/NotFound';
+import AccessDenied from './pages/errors/AccessDenied';
+import ServerError from './pages/errors/ServerError';
+import Maintenance from './pages/errors/Maintenance';
+import NetworkError from './pages/errors/NetworkError';
 
 // Voice Assistant Components
 import FloatingVoiceButton from './components/voice/FloatingVoiceButton';
@@ -67,13 +96,34 @@ function App() {
           <Navbar onOpenVoiceAssistant={() => setIsVoiceAssistantOpen(true)} />
           <div className="flex-1">
             <Routes>
-              {/* Public Routes */}
+              {/* Public & Informational Routes */}
               <Route path="/" element={<Home />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/help" element={<HelpSupport />} />
+              <Route path="/faq" element={<FAQ />} />
+
+              {/* Authentication & Profile Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/profile/edit" element={<EditProfile />} />
+
+              {/* Commerce, Search & Activities */}
               <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/search" element={<SearchResults />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/orders" element={<OrderHistory />} />
+              <Route path="/orders/:id" element={<OrderDetails />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+
+              {/* Voice AI Assistant */}
               <Route path="/assistant" element={<AssistantPage />} />
+
+              {/* Product Details */}
               <Route path="/produce/:id" element={<ProduceDetails />} />
               <Route path="/procurement/:id" element={<ProcurementDetails />} />
               <Route path="/dashboard" element={<RoleDashboardRedirect />} />
@@ -103,11 +153,22 @@ function App() {
               {/* Admin Routes */}
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
 
-              {/* Shared Routes */}
+              {/* Shared Communications */}
               <Route path="/messages" element={<Messages />} />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Legal Pages */}
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsConditions />} />
+              <Route path="/cookies" element={<CookiePolicy />} />
+
+              {/* System & Error Pages */}
+              <Route path="/access-denied" element={<AccessDenied />} />
+              <Route path="/server-error" element={<ServerError />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/network-error" element={<NetworkError />} />
+
+              {/* Fallback 404 Route */}
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </div>
           <Footer />

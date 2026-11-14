@@ -15,6 +15,11 @@ export const getCurrentUser = async () => {
   return res.data;
 };
 
+export const updateUserProfile = async (userData) => {
+  const res = await API.put('/auth/me', userData);
+  return res.data;
+};
+
 export const sendOtp = async (email) => {
   const res = await API.post('/auth/send-otp', { email });
   return res.data;

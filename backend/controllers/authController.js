@@ -208,6 +208,38 @@ const getMe = async (req, res) => {
   }
 };
 
+// @desc    Update current user profile
+// @route   PUT /api/auth/me
+// @access  Private
+const updateMe = async (req, res) => {
+  try {
+    const { name, phone, location, profileImage } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (name) user.name = name.trim();
+    if (phone) user.phone = phone.trim();
+    if (profileImage) user.profileImage = profileImage;
+    if (location) {
+      user.location = {
+        city: location.city || user.location?.city || 'Mysuru',
+        district: location.district || user.location?.district || 'Mysuru',
+        state: location.state || user.location?.state || 'Karnataka',
+        address: location.address !== undefined ? location.address : user.location?.address || '',
+        pincode: location.pincode !== undefined ? location.pincode : user.location?.pincode || '',
+      };
+    }
+
+    await user.save();
+    res.json({ success: true, message: 'Profile updated successfully', data: { user } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get all users (Admin/utility)
 // @route   GET /api/auth/users
 // @access  Private/Admin
@@ -708,6 +740,7 @@ module.exports = {
   registerUser,
   loginUser,
   getMe,
+  updateMe,
   getUsers,
   sendOtp,
   checkSmtpStatus,

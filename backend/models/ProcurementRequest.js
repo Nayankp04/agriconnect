@@ -15,23 +15,32 @@ const procurementRequestSchema = new mongoose.Schema(
     cropName: {
       type: String,
       required: true,
+      trim: true,
+    },
+    category: {
+      type: String,
+      enum: ['Vegetables', 'Fruits', 'Grains', 'Pulses', 'Spices', 'Oilseeds', 'Dairy', 'Other'],
+      default: 'Grains',
     },
     requiredQuantity: {
       type: Number,
       required: true,
+      min: [1, 'Quantity must be at least 1'],
     },
     fulfilledQuantity: {
       type: Number,
       default: 0,
+      min: 0,
     },
     unit: {
       type: String,
-      enum: ['kg', 'ton', 'quintal'],
+      enum: ['kg', 'quintal', 'ton', 'litre', 'bag', 'piece'],
       default: 'kg',
     },
     targetPrice: {
       type: Number,
       required: true,
+      min: [0, 'Target price must be positive'],
     },
     qualityGrade: {
       type: String,
@@ -42,10 +51,27 @@ const procurementRequestSchema = new mongoose.Schema(
       city: { type: String, required: true },
       district: { type: String, required: true },
       state: { type: String, default: 'Karnataka' },
+      address: { type: String, default: '' },
+      pincode: { type: String, default: '' },
+    },
+    images: [
+      {
+        type: String,
+      },
+    ],
+    referenceImage: {
+      type: String,
+      default: '',
     },
     deadline: {
       type: Date,
       required: true,
+    },
+    requiredDeliveryDate: {
+      type: Date,
+      default: function () {
+        return this.deadline || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      },
     },
     description: {
       type: String,

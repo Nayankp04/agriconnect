@@ -83,13 +83,13 @@ const Marketplace = () => {
         // Create Purchase Order
         const isFPO = user?.role === 'FPO';
         await createOrder({
-          sellerId: selectedItem.farmer._id || selectedItem.farmer,
+          sellerId: selectedItem.farmer?._id || selectedItem.farmer,
           produceId: selectedItem._id,
-          cropName: selectedItem.cropName,
+          cropName: selectedItem.name || selectedItem.cropName || 'Farm Produce',
           quantity: Number(orderQuantity),
           unit: selectedItem.unit || 'kg',
           pricePerUnit: Number(offeredPrice),
-          orderType: isFPO ? 'FPO_FARMER' : 'BUYER_FPO',
+          orderType: isFPO ? 'FPO_FARMER' : 'BUYER_FARMER',
           deliveryAddress: user?.location,
         });
         setActionSuccess('Purchase order created successfully! Available inventory updated.');

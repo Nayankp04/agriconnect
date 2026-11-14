@@ -3,10 +3,21 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Loading from '../../components/Loading';
 import StatusBadge from '../../components/StatusBadge';
 import MapView from '../../components/MapView';
+import Breadcrumbs from '../../components/Breadcrumbs';
 import { fetchProduceById } from '../../services/produceService';
 import { createOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
-import { ArrowLeft, MapPin, Calendar, Award, User, ShoppingCart, CheckCircle2, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  MapPin,
+  Calendar,
+  Award,
+  User,
+  ShoppingCart,
+  CheckCircle2,
+  ShieldCheck,
+  Plus
+} from 'lucide-react';
 
 const ProduceDetails = () => {
   const { id } = useParams();
@@ -20,6 +31,7 @@ const ProduceDetails = () => {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -27,9 +39,10 @@ const ProduceDetails = () => {
       try {
         const res = await fetchProduceById(id);
         if (res.success) {
-          setProduce(res.data);
-          setOrderQuantity(res.data.minOrderQuantity || 100);
-          setOfferedPrice(res.data.expectedPrice || 25);
+          const p = res.data;
+          setProduce(p);
+          setOrderQuantity(p.minOrderQuantity || 1);
+          setOfferedPrice(p.pricePerUnit || p.expectedPrice || 25);
         }
       } catch (err) {
         console.error('Failed to load produce details:', err.message);
@@ -39,6 +52,51 @@ const ProduceDetails = () => {
     };
     loadDetails();
   }, [id]);
+
+  const handleAddToCart = () => {
+    const qty = Number(orderQuantity);
+    if (!qty || qty <= 0) {
+      alert('Please enter a valid order quantity');
+      return;
+    }
+    if (qty > produce.availableQuantity) {
+      alert(`Requested quantity exceeds available stock (${produce.availableQuantity} ${produce.unit})`);
+      return;
+    }
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('agriconnect_cart') || '[]');
+      const itemIndex = existing.findIndex((i) => (i.produceId || i._id) === produce._id);
+
+      const cartItem = {
+        produceId: produce._id,
+        _id: produce._id,
+        name: produce.name || produce.cropName,
+        cropName: produce.name || produce.cropName,
+        variety: produce.variety,
+        unit: produce.unit || 'kg',
+        pricePerUnit: Number(offeredPrice) || produce.pricePerUnit || produce.expectedPrice,
+        quantity: qty,
+        availableQuantity: produce.availableQuantity,
+        sellerId: produce.farmer?._id || produce.farmer,
+        sellerName: produce.farmer?.name || 'Verified Producer',
+        location: produce.location,
+        image: produce.images && produce.images[0] ? produce.images[0] : null,
+      };
+
+      if (itemIndex > -1) {
+        existing[itemIndex] = cartItem;
+      } else {
+        existing.push(cartItem);
+      }
+
+      localStorage.setItem('agriconnect_cart', JSON.stringify(existing));
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 3000);
+    } catch (e) {
+      console.error('Cart error:', e);
+    }
+  };
 
   const handleCreateOrder = async (e) => {
     e.preventDefault();
@@ -53,23 +111,29 @@ const ProduceDetails = () => {
 
     try {
       const isFPO = user?.role === 'FPO';
-      await createOrder({
-        sellerId: produce.farmer._id || produce.farmer,
+      const cropTitle = produce.name || produce.cropName || 'Farm Produce';
+
+      const res = await createOrder({
+        sellerId: produce.farmer?._id || produce.farmer,
         produceId: produce._id,
-        cropName: produce.cropName,
+        cropName: cropTitle,
         quantity: Number(orderQuantity),
         unit: produce.unit || 'kg',
         pricePerUnit: Number(offeredPrice),
-        orderType: isFPO ? 'FPO_FARMER' : 'BUYER_FPO',
+        orderType: isFPO ? 'FPO_FARMER' : 'BUYER_FARMER',
         deliveryAddress: user?.location,
       });
 
       setSuccessMsg('Purchase order created cleanly! Available quantity locked and decremented.');
       setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+        if (res.data?._id) {
+          navigate(`/orders/${res.data._id}`);
+        } else {
+          navigate('/orders');
+        }
+      }, 1500);
     } catch (err) {
-      setErrorMsg(err.message || 'Order creation failed');
+      setErrorMsg(err.response?.data?.message || err.message || 'Order creation failed');
     } finally {
       setSubmitting(false);
     }
@@ -79,24 +143,29 @@ const ProduceDetails = () => {
   if (!produce) return <div className="p-8 text-center text-slate-500">Produce listing not found.</div>;
 
   const defaultImg = 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=80';
+  const cropTitle = produce.name || produce.cropName || 'Agricultural Produce';
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <button
-        onClick={() => navigate(-1)}
-        className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Marketplace
-      </button>
+      <Breadcrumbs
+        items={[
+          { label: 'Marketplace', path: '/marketplace' },
+          { label: cropTitle, active: true },
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
         {/* Left: Image & Map */}
         <div className="space-y-6">
-          <div className="relative h-72 rounded-2xl overflow-hidden shadow-md">
+          <div className="relative h-72 rounded-2xl overflow-hidden shadow-md bg-slate-100">
             <img
               src={produce.images && produce.images[0] ? produce.images[0] : defaultImg}
-              alt={produce.cropName}
+              alt={cropTitle}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = defaultImg;
+              }}
             />
             <div className="absolute top-4 left-4 flex gap-2">
               <span className="px-3 py-1 bg-white/95 backdrop-blur-md rounded-full text-xs font-extrabold text-slate-900 shadow">
@@ -109,7 +178,7 @@ const ProduceDetails = () => {
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Farm Location Map</h4>
             <MapView
-              pickup={{ lat: 12.2958, lng: 76.6394, title: `${produce.farmer?.name}'s Farm (${produce.location?.city})` }}
+              pickup={{ lat: 12.2958, lng: 76.6394, title: `${produce.farmer?.name || 'Farmer'}'s Farm (${produce.location?.city || 'Mysuru'})` }}
               delivery={{ lat: 12.9716, lng: 77.5946, title: 'Your Destination APMC Yard' }}
               height="220px"
             />
@@ -120,37 +189,48 @@ const ProduceDetails = () => {
         <div className="space-y-6 flex flex-col justify-between">
           <div className="space-y-4">
             <div>
-              <span className="text-xs font-bold text-agri-700 uppercase tracking-wider">{produce.variety || 'Native Crop'}</span>
-              <h1 className="text-3xl font-black text-slate-900">{produce.cropName}</h1>
-              <p className="text-2xl font-black text-agri-800 mt-1">
-                ₹{produce.expectedPrice} <span className="text-sm font-normal text-slate-500">per {produce.unit || 'kg'}</span>
+              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">{produce.variety || produce.category || 'Farm Produce'}</span>
+              <h1 className="text-3xl font-black text-slate-900">{cropTitle}</h1>
+              <p className="text-2xl font-black text-emerald-800 mt-1">
+                ₹{produce.pricePerUnit || produce.expectedPrice} <span className="text-sm font-normal text-slate-500">per {produce.unit || 'kg'}</span>
               </p>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">{produce.description}</p>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {produce.description || `Freshly harvested ${cropTitle} available directly from verified farmer producers in ${produce.location?.city || 'Mysuru'}.`}
+            </p>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-500">Available Stock:</span>
-                <strong className="text-agri-900 font-extrabold">{produce.availableQuantity?.toLocaleString()} {produce.unit || 'kg'}</strong>
+                <strong className="text-emerald-900 font-extrabold">{produce.availableQuantity?.toLocaleString()} {produce.unit || 'kg'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Harvested:</span>
                 <span className="font-semibold">{produce.quantity?.toLocaleString()} {produce.unit || 'kg'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Min Order Quantity:</span>
-                <span className="font-semibold">{produce.minOrderQuantity} {produce.unit || 'kg'}</span>
+                <span className="text-slate-500">Farmer / Origin:</span>
+                <span className="font-bold text-slate-800">{produce.farmer?.name || 'Verified Farmer Partner'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Farmer:</span>
-                <span className="font-bold text-slate-800">{produce.farmer?.name || 'Verified Farmer Partner'}</span>
+                <span className="text-slate-500">Location:</span>
+                <span className="font-semibold">{produce.location?.city || 'Mysuru'}, {produce.location?.state || 'Karnataka'}</span>
               </div>
             </div>
           </div>
 
-          {/* Direct Order Form */}
-          <div className="pt-4 border-t border-slate-100">
+          {/* Order Actions */}
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            {addedToCart && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Added to your Cart!
+                </span>
+                <Link to="/cart" className="underline font-black">View Cart</Link>
+              </div>
+            )}
+
             {successMsg ? (
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -170,7 +250,7 @@ const ProduceDetails = () => {
                       max={produce.availableQuantity}
                       value={orderQuantity}
                       onChange={(e) => setOrderQuantity(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-agri-600"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600"
                     />
                   </div>
 
@@ -181,19 +261,30 @@ const ProduceDetails = () => {
                       required
                       value={offeredPrice}
                       onChange={(e) => setOfferedPrice(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-agri-600"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600"
                     />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting || produce.availableQuantity === 0}
-                  className="w-full py-3.5 bg-agri-700 hover:bg-agri-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  {submitting ? 'Processing Purchase Order...' : 'Place Direct Purchase Order'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={produce.availableQuantity === 0}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 border border-slate-200 disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" /> Add to Cart
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={submitting || produce.availableQuantity === 0}
+                    className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    {submitting ? 'Placing...' : 'Direct Purchase'}
+                  </button>
+                </div>
               </form>
             )}
           </div>

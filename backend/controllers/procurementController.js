@@ -9,26 +9,45 @@ const createProcurement = async (req, res) => {
   try {
     const {
       cropName,
+      category,
       requiredQuantity,
       unit,
       targetPrice,
       qualityGrade,
       location,
       deadline,
+      requiredDeliveryDate,
+      images,
+      referenceImage,
       description,
     } = req.body;
+
+    let resolvedCategory = 'Grains';
+    if (category) {
+      const match = ['Vegetables', 'Fruits', 'Grains', 'Pulses', 'Spices', 'Oilseeds', 'Dairy', 'Other'].find(
+        (c) => c.toLowerCase() === String(category).toLowerCase()
+      );
+      if (match) resolvedCategory = match;
+    }
+
+    const qty = req.body.requiredQuantity !== undefined ? Number(req.body.requiredQuantity) : Number(req.body.quantity);
+    const price = req.body.targetPrice !== undefined ? Number(req.body.targetPrice) : Number(req.body.targetPricePerUnit);
 
     const procurement = await ProcurementRequest.create({
       requester: req.user._id,
       requesterRole: req.user.role,
       cropName,
-      requiredQuantity: Number(requiredQuantity),
+      category: resolvedCategory,
+      requiredQuantity: qty,
       unit: unit || 'kg',
-      targetPrice: Number(targetPrice),
+      targetPrice: price,
       qualityGrade: qualityGrade || 'Grade A',
       location: location || req.user.location,
       deadline: deadline || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      description,
+      requiredDeliveryDate: requiredDeliveryDate || deadline || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      images: images || (referenceImage ? [referenceImage] : []),
+      referenceImage: referenceImage || (images && images[0]) || '',
+      description: description || 'High quality agricultural demand requirement.',
     });
 
     const populatedProcurement = await ProcurementRequest.findById(procurement._id).populate('requester', 'name email phone role location profileImage');
@@ -191,10 +210,58 @@ const handleResponseStatus = async (req, res) => {
   }
 };
 
+// @desc    Update procurement request / demand
+// @route   PUT /api/procurement/:id
+// @access  Private/Requester/Admin
+const updateProcurement = async (req, res) => {
+  try {
+    let procurement = await ProcurementRequest.findById(req.params.id);
+    if (!procurement) {
+      return res.status(404).json({ success: false, message: 'Procurement requirement not found' });
+    }
+
+    if (procurement.requester.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this requirement' });
+    }
+
+    procurement = await ProcurementRequest.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    }).populate('requester', 'name email phone role location profileImage');
+
+    res.json({ success: true, message: 'Requirement updated successfully', data: procurement });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete procurement request / demand
+// @route   DELETE /api/procurement/:id
+// @access  Private/Requester/Admin
+const deleteProcurement = async (req, res) => {
+  try {
+    const procurement = await ProcurementRequest.findById(req.params.id);
+    if (!procurement) {
+      return res.status(404).json({ success: false, message: 'Procurement requirement not found' });
+    }
+
+    if (procurement.requester.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this requirement' });
+    }
+
+    await procurement.deleteOne();
+    res.json({ success: true, message: 'Requirement removed successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createProcurement,
   getProcurements,
   getProcurementById,
+  updateProcurement,
+  deleteProcurement,
   respondToProcurement,
   handleResponseStatus,
 };

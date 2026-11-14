@@ -3,6 +3,7 @@ import {
   loginUser,
   registerUser,
   getCurrentUser,
+  updateUserProfile,
   sendOtp as sendOtpService,
   verifyFirebaseRegistration,
 } from '../services/authService';
@@ -72,6 +73,15 @@ export const AuthProvider = ({ children }) => {
     throw new Error(res.message || 'Failed to send OTP');
   };
 
+  const updateProfile = async (userData) => {
+    const res = await updateUserProfile(userData);
+    if (res.success) {
+      setUser(res.data);
+      return res.data;
+    }
+    throw new Error(res.message || 'Profile update failed');
+  };
+
   const logout = () => {
     localStorage.removeItem('agriconnect_token');
     setUser(null);
@@ -91,6 +101,7 @@ export const AuthProvider = ({ children }) => {
         register,
         finalizeRegistrationWithToken,
         sendOtp,
+        updateProfile,
         logout,
         switchDemoRole,
         isAuthenticated: !!user,

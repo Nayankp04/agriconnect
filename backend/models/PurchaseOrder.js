@@ -47,7 +47,7 @@ const purchaseOrderSchema = new mongoose.Schema(
     },
     orderType: {
       type: String,
-      enum: ['FPO_FARMER', 'BUYER_FPO'],
+      enum: ['FPO_FARMER', 'BUYER_FPO', 'BUYER_FARMER'],
       required: true,
     },
     status: {

@@ -9,31 +9,48 @@ const createProduce = async (req, res) => {
     const {
       cropName,
       variety,
+      category,
       quantity,
       unit,
       expectedPrice,
       minOrderQuantity,
       harvestDate,
+      availableFrom,
       qualityGrade,
       location,
       images,
       description,
+      status,
     } = req.body;
+
+    const resolvedCropName = cropName || req.body.name || 'Crop Produce';
+    const resolvedPrice = expectedPrice !== undefined ? Number(expectedPrice) : Number(req.body.pricePerUnit);
+
+    let resolvedCategory = 'Vegetables';
+    if (category) {
+      const match = ['Vegetables', 'Fruits', 'Grains', 'Pulses', 'Spices', 'Oilseeds', 'Dairy', 'Other'].find(
+        (c) => c.toLowerCase() === String(category).toLowerCase()
+      );
+      if (match) resolvedCategory = match;
+    }
 
     const produce = await Produce.create({
       farmer: req.user._id,
-      cropName,
-      variety,
+      cropName: resolvedCropName,
+      variety: variety || 'Standard Native',
+      category: resolvedCategory,
       quantity: Number(quantity),
-      availableQuantity: Number(quantity),
+      availableQuantity: req.body.availableQuantity !== undefined ? Number(req.body.availableQuantity) : Number(quantity),
       unit: unit || 'kg',
-      expectedPrice: Number(expectedPrice),
-      minOrderQuantity: Number(minOrderQuantity) || 100,
+      expectedPrice: resolvedPrice,
+      minOrderQuantity: Number(minOrderQuantity) || 1,
       harvestDate: harvestDate || new Date(),
+      availableFrom: availableFrom || new Date(),
       qualityGrade: qualityGrade || 'Grade A',
       location: location || req.user.location,
       images: images && images.length ? images : ['https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=600&q=80'],
-      description,
+      description: description || 'Fresh high quality produce harvested directly from farm.',
+      status: status || 'AVAILABLE',
     });
 
     const populatedProduce = await Produce.findById(produce._id).populate('farmer', 'name email phone location profileImage');
@@ -155,10 +172,51 @@ const deleteProduce = async (req, res) => {
   }
 };
 
+// @desc    Quickly update available stock & status
+// @route   PATCH /api/produce/:id/stock
+// @access  Private/Farmer/Admin
+const updateProduceStock = async (req, res) => {
+  try {
+    const { availableQuantity, status } = req.body;
+    const produce = await Produce.findById(req.params.id);
+
+    if (!produce) {
+      return res.status(404).json({ success: false, message: 'Produce listing not found' });
+    }
+
+    if (produce.farmer.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this listing' });
+    }
+
+    if (availableQuantity !== undefined) {
+      const qty = Number(availableQuantity);
+      if (qty < 0) {
+        return res.status(400).json({ success: false, message: 'Available quantity cannot be negative' });
+      }
+      produce.availableQuantity = qty;
+      if (qty === 0) {
+        produce.status = 'SOLD_OUT';
+      } else if (produce.status === 'SOLD_OUT') {
+        produce.status = 'AVAILABLE';
+      }
+    }
+
+    if (status) {
+      produce.status = status;
+    }
+
+    await produce.save();
+    res.json({ success: true, message: 'Stock updated successfully', data: produce });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createProduce,
   getProduces,
   getProduceById,
   updateProduce,
   deleteProduce,
+  updateProduceStock,
 };

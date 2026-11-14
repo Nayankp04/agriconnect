@@ -9,21 +9,47 @@ const vehicleSchema = new mongoose.Schema(
     },
     vehicleType: {
       type: String,
-      enum: ['Container Truck 10-Ton', 'Eicher 5-Ton', 'Pickup Van 2-Ton', 'Refrigerated Truck 8-Ton'],
       required: true,
+      trim: true,
     },
     registrationNumber: {
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      uppercase: true,
     },
     capacityTons: {
       type: Number,
       required: true,
+      min: [0.1, 'Capacity must be at least 0.1 tons'],
     },
+    availableCapacityTons: {
+      type: Number,
+      default: function () {
+        return this.capacityTons || 5;
+      },
+      min: [0, 'Available capacity cannot be negative'],
+    },
+    serviceLocations: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    images: [
+      {
+        type: String,
+      },
+    ],
     pricePerKm: {
       type: Number,
       required: true,
+      min: [0, 'Price per km must be positive'],
+    },
+    pricePerTon: {
+      type: Number,
+      default: 0,
     },
     currentCity: {
       type: String,
@@ -37,6 +63,11 @@ const vehicleSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    status: {
+      type: String,
+      enum: ['AVAILABLE', 'BUSY', 'MAINTENANCE', 'UNAVAILABLE'],
+      default: 'AVAILABLE',
+    },
     driverName: {
       type: String,
       default: 'Ramesh Kumar',
@@ -44,6 +75,14 @@ const vehicleSchema = new mongoose.Schema(
     driverPhone: {
       type: String,
       default: '+91 9876543210',
+    },
+    contactName: {
+      type: String,
+      default: '',
+    },
+    contactPhone: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }

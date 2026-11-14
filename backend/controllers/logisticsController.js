@@ -44,26 +44,94 @@ const getVehicles = async (req, res) => {
 // @desc    Register a new vehicle
 const addVehicle = async (req, res) => {
   try {
-    const { vehicleType, registrationNumber, capacityTons, pricePerKm, currentCity, availableDate, driverName, driverPhone } = req.body;
+    const {
+      vehicleType,
+      registrationNumber,
+      capacityTons,
+      availableCapacityTons,
+      serviceLocations,
+      pricePerKm,
+      pricePerTon,
+      currentCity,
+      availableDate,
+      isAvailable,
+      status,
+      driverName,
+      driverPhone,
+      contactName,
+      contactPhone,
+      images,
+    } = req.body;
 
-    const existingVehicle = await Vehicle.findOne({ registrationNumber });
+    const cleanReg = String(registrationNumber).trim().toUpperCase();
+    const existingVehicle = await Vehicle.findOne({ registrationNumber: cleanReg });
     if (existingVehicle) {
       return res.status(400).json({ success: false, message: 'Vehicle already registered with this registration number' });
     }
 
     const vehicle = await Vehicle.create({
       owner: req.user._id,
-      vehicleType,
-      registrationNumber,
+      vehicleType: vehicleType || 'Pickup Van 2-Ton',
+      registrationNumber: cleanReg,
       capacityTons: Number(capacityTons),
+      availableCapacityTons: availableCapacityTons !== undefined ? Number(availableCapacityTons) : Number(capacityTons),
+      serviceLocations: serviceLocations || [currentCity || req.user.location?.city || 'Mysuru'],
       pricePerKm: Number(pricePerKm),
-      currentCity: currentCity || req.user.location.city,
+      pricePerTon: Number(pricePerTon) || 0,
+      currentCity: currentCity || req.user.location?.city || 'Mysuru',
       availableDate: availableDate || new Date(),
-      driverName: driverName || 'Driver Partner',
+      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      status: status || 'AVAILABLE',
+      driverName: driverName || req.user.name,
       driverPhone: driverPhone || req.user.phone,
+      contactName: contactName || req.user.name,
+      contactPhone: contactPhone || req.user.phone,
+      images: images || [],
     });
 
-    res.status(201).json({ success: true, data: vehicle });
+    res.status(201).json({ success: true, message: 'Vehicle registered successfully', data: vehicle });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update vehicle capacity, details & status
+const updateVehicle = async (req, res) => {
+  try {
+    let vehicle = await Vehicle.findById(req.params.id);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    if (vehicle.owner.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this vehicle' });
+    }
+
+    vehicle = await Vehicle.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
+    res.json({ success: true, message: 'Vehicle updated successfully', data: vehicle });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Delete a vehicle
+const deleteVehicle = async (req, res) => {
+  try {
+    const vehicle = await Vehicle.findById(req.params.id);
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    if (vehicle.owner.toString() !== req.user._id.toString() && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this vehicle' });
+    }
+
+    await vehicle.deleteOne();
+    res.json({ success: true, message: 'Vehicle removed successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -117,5 +185,7 @@ module.exports = {
   updateLogisticsProfile,
   getVehicles,
   addVehicle,
+  updateVehicle,
+  deleteVehicle,
   getLogisticsDashboard,
 };
