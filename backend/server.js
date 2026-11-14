@@ -1,6 +1,6 @@
 const app = require('./app');
 const connectDB = require('./config/database');
-const { verifySmtpConnection } = require('./utils/emailService');
+const { verifyEmailService } = require('./utils/emailService');
 
 const PORT = process.env.PORT || 8080;
 
@@ -18,9 +18,9 @@ async function startServer() {
     console.warn(`[Database Connection] Notice: ${err.message}`);
   });
 
-  // 3. Verify SMTP Email Service on startup
-  verifySmtpConnection().catch((err) => {
-    console.warn(`[SMTP Startup Check] Notice: ${err.message}`);
+  // 3. Verify Resend Email Service on startup (HTTPS)
+  verifyEmailService().catch((err) => {
+    console.warn(`[Email Service Startup Check] Notice: ${err.message}`);
   });
 
   return server;

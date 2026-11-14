@@ -6,7 +6,7 @@ const BuyerProfile = require('../models/BuyerProfile');
 const LogisticsProfile = require('../models/LogisticsProfile');
 const Otp = require('../models/Otp');
 const generateToken = require('../utils/generateToken');
-const { sendOtpEmail, verifySmtpConnection, maskEmail } = require('../utils/emailService');
+const { sendOtpEmail, verifyEmailService, maskEmail } = require('../utils/emailService');
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
 
@@ -205,7 +205,7 @@ const getUsers = async (req, res) => {
   }
 };
 
-// @desc    Send OTP to email via Nodemailer SMTP
+// @desc    Send OTP to email via Resend HTTPS API
 // @route   POST /api/auth/send-otp
 // @access  Public
 const sendOtp = async (req, res) => {
@@ -234,8 +234,8 @@ const sendOtp = async (req, res) => {
     // Generate a 6-digit OTP
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 1. Attempt actual SMTP email delivery FIRST
-    // Only proceed to store OTP and return success if sendMail succeeds and recipient is accepted
+    // 1. Attempt actual Resend HTTPS email delivery FIRST
+    // Only proceed to store OTP and return success if Resend confirms delivery with a valid ID
     let emailResult;
     try {
       emailResult = await sendOtpEmail({
@@ -246,8 +246,8 @@ const sendOtp = async (req, res) => {
     } catch (deliveryError) {
       console.error(`[Auth] ⚠️ OTP delivery notice for ${maskEmail(normalizedEmail)}:`, deliveryError.message);
 
-      // In development or when SMTP is not configured, generate valid mock OTP so registration succeeds smoothly
-      if (deliveryError.code === 'SMTP_NOT_CONFIGURED' || !process.env.SMTP_PASSWORD) {
+      // In local dev mode when RESEND_API_KEY is not yet configured, provide mock OTP so registration testing can proceed
+      if (deliveryError.code === 'RESEND_NOT_CONFIGURED' || !process.env.RESEND_API_KEY) {
         console.log(`[Auth] 💡 [DEV MODE OTP]: Verification code for ${normalizedEmail} is: ${generatedOtp}`);
         await Otp.deleteMany({ email: normalizedEmail });
         await Otp.create({
@@ -265,16 +265,15 @@ const sendOtp = async (req, res) => {
           },
         });
       }
-      
-      let clientMsg = 'Failed to deliver OTP email. Please try again.';
-      if (deliveryError.code === 'EAUTH') {
-        clientMsg = 'SMTP authentication failed. For Gmail, Google requires a 16-character Google App Password (not your standard account password) in backend config.';
-      } else if (deliveryError.message && deliveryError.message.toLowerCase().includes('certificate')) {
-        clientMsg = 'SMTP TLS certificate verification failed. Please ensure the local root certificate is configured or check network security settings.';
-      } else if (deliveryError.code === 'ETIMEDOUT' || deliveryError.code === 'ESOCKET') {
-        clientMsg = 'SMTP server connection timed out or was interrupted. Please check network connection and try again.';
-      } else if (deliveryError.code === 'RECIPIENT_NOT_ACCEPTED') {
-        clientMsg = 'The email address was rejected by the SMTP mail server. Please verify the email address.';
+
+      // Live delivery failure from Resend
+      let clientMsg = deliveryError.message || 'Failed to deliver OTP email. Please try again.';
+      if (deliveryError.statusCode === 401 || deliveryError.message?.includes('API key')) {
+        clientMsg = 'Email service authentication failed. Please verify RESEND_API_KEY in backend configuration.';
+      } else if (deliveryError.statusCode === 403 || deliveryError.message?.includes('domain')) {
+        clientMsg = 'Email domain not verified or sender address rejected by Resend. Verify RESEND_FROM_EMAIL settings.';
+      } else if (deliveryError.statusCode === 429) {
+        clientMsg = 'Email rate limit exceeded. Please wait a minute and try again.';
       }
 
       return res.status(503).json({
@@ -291,7 +290,7 @@ const sendOtp = async (req, res) => {
       otp: generatedOtp,
     });
 
-    console.log(`[Auth] ✅ OTP email dispatched successfully to ${maskEmail(normalizedEmail)} (MessageID: ${emailResult.messageId})`);
+    console.log(`[Auth] ✅ OTP email dispatched successfully to ${maskEmail(normalizedEmail)} (Resend ID: ${emailResult.messageId})`);
 
     // 3. Return confirmed success response to the client
     res.status(200).json({
@@ -299,7 +298,6 @@ const sendOtp = async (req, res) => {
       message: 'Verification OTP has been sent successfully to your email address.',
       data: {
         messageId: emailResult.messageId,
-        accepted: emailResult.accepted,
       },
     });
   } catch (error) {
@@ -308,12 +306,12 @@ const sendOtp = async (req, res) => {
   }
 };
 
-// @desc    Verify SMTP server configuration (Development / Diagnostic)
-// @route   GET /api/auth/smtp-status
+// @desc    Verify Email service configuration (Resend HTTPS)
+// @route   GET /api/auth/smtp-status and /api/auth/email-status
 // @access  Public / Diagnostic
 const checkSmtpStatus = async (req, res) => {
   try {
-    const status = await verifySmtpConnection();
+    const status = await verifyEmailService();
     res.status(status.success ? 200 : 503).json(status);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

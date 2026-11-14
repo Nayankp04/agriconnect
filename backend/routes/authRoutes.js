@@ -7,6 +7,7 @@ const { authorize } = require('../middleware/roleMiddleware');
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/send-otp', sendOtp);
+router.get('/email-status', checkSmtpStatus);
 router.get('/smtp-status', checkSmtpStatus);
 router.get('/me', protect, getMe);
 router.get('/users', protect, authorize('ADMIN'), getUsers);
