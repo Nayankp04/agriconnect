@@ -1,4 +1,6 @@
-const admin = require('firebase-admin');
+
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
 let firebaseApp = null;
 let isConfigured = false;
@@ -13,25 +15,28 @@ function initFirebaseAdmin() {
     let clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-    // Check for JSON string credential
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       try {
         const parsedKey = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
         clientEmail = parsedKey.client_email || clientEmail;
         privateKey = parsedKey.private_key || privateKey;
-      } catch (e) {
-        console.warn('[FirebaseAdmin] Warning: FIREBASE_SERVICE_ACCOUNT_KEY was provided but could not be parsed as JSON.');
+      } catch (error) {
+        console.warn('[FirebaseAdmin] FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.');
       }
     }
 
-    if (clientEmail && privateKey) {
-      // Normalize escaped newlines from environment variables
-      const formattedPrivateKey = privateKey.includes('\\n')
-        ? privateKey.replace(/\\n/g, '\n')
-        : privateKey;
+    if (!clientEmail || !privateKey) {
+      console.warn('[FirebaseAdmin] Firebase service account credentials are missing.');
+      return null;
+    }
 
-      firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert({
+    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+
+    const existingApps = getApps();
+    firebaseApp = existingApps.length
+      ? existingApps[0]
+      : initializeApp({
+        credential: cert({
           projectId,
           clientEmail,
           privateKey: formattedPrivateKey,
@@ -39,27 +44,18 @@ function initFirebaseAdmin() {
         projectId,
       });
 
-      isConfigured = true;
-      console.log(`[FirebaseAdmin] ✅ Initialized Firebase Admin SDK for project: ${projectId}`);
-    } else {
-      console.warn('[FirebaseAdmin] ⚠️ Credentials (FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY) not set in environment.');
-      console.warn('[FirebaseAdmin] ℹ️ Live Firebase ID Token verification requires these variables on Render/production.');
-    }
-  } catch (error) {
-    console.error('[FirebaseAdmin] ❌ Error initializing Firebase Admin SDK:', error.message);
-  }
+    isConfigured = true;
+    console.log(`[FirebaseAdmin] Initialized Firebase Admin SDK for project: ${projectId}`);
 
-  return firebaseApp;
+    return firebaseApp;
+  } catch (error) {
+    console.error('[FirebaseAdmin] Error initializing Firebase Admin SDK:', error.message);
+    return null;
+  }
 }
 
-// Initialize on module load
 initFirebaseAdmin();
 
-/**
- * Verify a Firebase ID token securely on the backend
- * @param {string} idToken - The Firebase ID token from the client
- * @returns {Promise<admin.auth.DecodedIdToken>}
- */
 async function verifyFirebaseIdToken(idToken) {
   if (!idToken || typeof idToken !== 'string') {
     const err = new Error('A valid Firebase ID token string is required.');
@@ -68,7 +64,7 @@ async function verifyFirebaseIdToken(idToken) {
     throw err;
   }
 
-  if (!isConfigured) {
+  if (!isConfigured || !firebaseApp) {
     const err = new Error('Firebase Admin SDK is not configured with service account credentials in environment.');
     err.code = 'FIREBASE_NOT_CONFIGURED';
     err.statusCode = 503;
@@ -76,10 +72,9 @@ async function verifyFirebaseIdToken(idToken) {
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken, true);
-    return decodedToken;
+    return await getAuth(firebaseApp).verifyIdToken(idToken, true);
   } catch (authError) {
-    console.error('[FirebaseAdmin] ❌ Token verification failed:', authError.message);
+    console.error('[FirebaseAdmin] Token verification failed:', authError.message);
     const err = new Error(`Firebase token verification failed: ${authError.message}`);
     err.code = authError.code || 'TOKEN_VERIFICATION_FAILED';
     err.statusCode = 401;
@@ -88,9 +83,7 @@ async function verifyFirebaseIdToken(idToken) {
 }
 
 module.exports = {
-  admin,
   initFirebaseAdmin,
   verifyFirebaseIdToken,
   isFirebaseAdminConfigured: () => isConfigured,
 };
-
