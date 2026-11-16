@@ -1,4 +1,5 @@
 
+const fs = require('fs');
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 
@@ -6,50 +7,70 @@ let firebaseApp = null;
 let isConfigured = false;
 
 function initFirebaseAdmin() {
-  if (firebaseApp) {
-    return firebaseApp;
-  }
+  if (firebaseApp) return firebaseApp;
 
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID || 'agriconnect-f12ab';
-    let clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const serviceAccountPath =
+      process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+      '/etc/secrets/firebase-service-account.json';
 
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      try {
-        const parsedKey = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        clientEmail = parsedKey.client_email || clientEmail;
-        privateKey = parsedKey.private_key || privateKey;
-      } catch (error) {
-        console.warn('[FirebaseAdmin] FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.');
-      }
+    let serviceAccount = null;
+
+    if (fs.existsSync(serviceAccountPath)) {
+      serviceAccount = JSON.parse(
+        fs.readFileSync(serviceAccountPath, 'utf8')
+      );
+      console.log('[FirebaseAdmin] Loaded credentials from Secret File.');
+    } else {
+      console.warn('[FirebaseAdmin] Secret File not found:', serviceAccountPath);
+      console.warn('[FirebaseAdmin] Checking environment variables instead.');
     }
 
+    let projectId =
+      serviceAccount?.project_id ||
+      process.env.FIREBASE_PROJECT_ID ||
+      'agriconnect-f12ab';
+
+    const clientEmail =
+      serviceAccount?.client_email ||
+      process.env.FIREBASE_CLIENT_EMAIL;
+
+    const privateKey =
+      serviceAccount?.private_key ||
+      process.env.FIREBASE_PRIVATE_KEY;
+
     if (!clientEmail || !privateKey) {
-      console.warn('[FirebaseAdmin] Firebase service account credentials are missing.');
+      console.error('[FirebaseAdmin] Service account credentials are missing.');
       return null;
     }
 
     const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
 
     const existingApps = getApps();
+
     firebaseApp = existingApps.length
       ? existingApps[0]
       : initializeApp({
-        credential: cert({
+          credential: cert({
+            projectId,
+            clientEmail,
+            privateKey: formattedPrivateKey,
+          }),
           projectId,
-          clientEmail,
-          privateKey: formattedPrivateKey,
-        }),
-        projectId,
-      });
+        });
 
     isConfigured = true;
-    console.log(`[FirebaseAdmin] Initialized Firebase Admin SDK for project: ${projectId}`);
+
+    console.log(
+      `[FirebaseAdmin] Initialized successfully for project: ${projectId}`
+    );
 
     return firebaseApp;
   } catch (error) {
-    console.error('[FirebaseAdmin] Error initializing Firebase Admin SDK:', error.message);
+    console.error(
+      '[FirebaseAdmin] Error initializing Firebase Admin SDK:',
+      error.message
+    );
     return null;
   }
 }
@@ -65,7 +86,9 @@ async function verifyFirebaseIdToken(idToken) {
   }
 
   if (!isConfigured || !firebaseApp) {
-    const err = new Error('Firebase Admin SDK is not configured with service account credentials in environment.');
+    const err = new Error(
+      'Firebase Admin SDK is not configured with service account credentials.'
+    );
     err.code = 'FIREBASE_NOT_CONFIGURED';
     err.statusCode = 503;
     throw err;
@@ -75,7 +98,9 @@ async function verifyFirebaseIdToken(idToken) {
     return await getAuth(firebaseApp).verifyIdToken(idToken, true);
   } catch (authError) {
     console.error('[FirebaseAdmin] Token verification failed:', authError.message);
-    const err = new Error(`Firebase token verification failed: ${authError.message}`);
+    const err = new Error(
+      `Firebase token verification failed: ${authError.message}`
+    );
     err.code = authError.code || 'TOKEN_VERIFICATION_FAILED';
     err.statusCode = 401;
     throw err;
